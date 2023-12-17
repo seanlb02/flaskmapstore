@@ -12,8 +12,10 @@ from fiona.io import ZipMemoryFile
 import zipfile
 import copy
 import os
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 ALLOWED_EXTENSIONS = {'zip', 'shp', 'cpg', 'prj', '.sbn', '.shx', '.xml', '.qmd', '.qix', 'sbx'}
 
 @app.route('/', methods=['POST'])
