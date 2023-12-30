@@ -88,11 +88,11 @@ def index():
                                         else:
                                             topo_error = "No"
                                     res_list = [*res_list, [layer_name, geometry, projection, corr_file, no_attr, geom_error, topo_error]]
-            
+                                    response = {"data": res_list}
         except fiona.errors.DriverError: 
             pass
 
-        return str(res_list)
+        return response
 
 @app.route('/get', methods=['GET'])
 def getlayer():
