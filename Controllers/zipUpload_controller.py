@@ -1,33 +1,27 @@
-from flask import Flask, jsonify
-from flask import flash, request, redirect, url_for
-from werkzeug.utils import secure_filename
-import zipfile
-from flask import render_template
-import geopandas as gpd
-import io
+from os import name
+from flask import Blueprint, request
+from db import db, ma
+from sqlalchemy import or_
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from datetime import datetime
 from fiona.io import ZipMemoryFile
 import fiona
-import tempfile
-from fiona.io import ZipMemoryFile
 import zipfile
-import copy
-import os
-from flask_cors import CORS
+import geopandas as gpd
+from werkzeug.utils import secure_filename
 
-from Controllers.zipUpload_controller import upload_bp
-from db import db, ma, bcrypt, jwt, generate_password_hash
+import json
+from fiona.model import ObjectEncoder
+from fiona.model import GEOMETRY_TYPES, Geometry
 
-app = Flask(__name__)
-CORS(app)
-ALLOWED_EXTENSIONS = {'zip', 'shp', 'cpg', 'prj', '.sbn', '.shx', '.xml', '.qmd', '.qix', 'sbx'}
 
-app.register_blueprint(upload_bp)
 
-# db.init_app(app)
-# ma.init_app(app)
 
-@app.route('/', methods=['POST'])
-def index():
+upload_bp = Blueprint('upload', __name__, url_prefix='/upload')
+
+@upload_bp.route('/zip/', methods=['POST'])
+def transform_zip():
+    ALLOWED_EXTENSIONS = {'zip', 'shp', 'cpg', 'prj', '.sbn', '.shx', '.xml', '.qmd', '.qix', 'sbx'}
     if request.method == 'POST':        
                 # retrieve the file sent via post request (the 'input' element name is data_zip_file)
         file = request.files['data_zip_file']
@@ -62,27 +56,29 @@ def index():
                                     topo_err = ""
                                         # with zip.open(f'{file_names[0][:-4]}.shp') as collection:
                                     with zip.open(f'{shapefile}') as collection:
+                                        bbox = collection.bounds                                  
                                         gdf = gpd.GeoDataFrame.from_features([feature for feature in collection], crs=collection.crs)
-                                    gdf.sindex
+                                        geojson = gdf.to_json()
+                                    gdf.sindex 
                                     geometry = str(gdf.geom_type[0])
                                     projection = gdf.crs.name
                                     # geom err check:
                                     if False in gdf.is_valid.values:
-                                        geom_error = "Yes"
+                                        geom_error = True
                                     else: 
-                                        geom_error = "No"
-                                    
+                                        geom_error = False
+
                                     # corrupt geometry check:
                                     corr_file = ""
                                     if True in gdf.is_empty.values:
-                                        corr_file = "Yes"
+                                        corr_file = True
                                     else:
-                                        corr_file= "No"
+                                        corr_file= True
                                     # empty attribute table:
                                     if gdf.shape[1] >= 4:
-                                        no_attr = "Present"
+                                        no_attr = True
                                     else:
-                                        no_attr = "None"
+                                        no_attr = True
                                     # Topology check
                                     # We only check Topology/Geometry errors for polygons and multilines
                                     if 'Point' in gdf.geom_type:
@@ -92,21 +88,13 @@ def index():
                                         sdf = gdf.sindex.query(gdf.geometry, predicate='overlaps')
                                         # if there are any:
                                         if sdf.size != 0:
-                                            topo_error = "Yes"
-                                        else:
-                                            topo_error = "No"
-                                    res_list = [*res_list, [layer_name, geometry, projection, corr_file, no_attr, geom_error, topo_error]]
+                                            topo_error = True
+                                        else: 
+                                            topo_error = False
+                                    res_list = [*res_list, [layer_name, geometry, projection, corr_file, no_attr, geom_error, topo_error, bbox, geojson]]
                                     response = {"data": res_list}
+
         except fiona.errors.DriverError: 
             pass
 
-        return response
-
-@app.route('/get', methods=['GET'])
-def getlayer():
-    if request.method == 'GET':
-        return jsonify({"hello": "Welcome to your Flask app 🚅"})
-
-
-if __name__ == '__main__':
-    app.run(debug=True, port=os.getenv("PORT", default=5000))
+    return response
